@@ -97,9 +97,9 @@ and any other long-running programs.
 
 For complete documentation see the `river(1)` man page.
 
-## Strict No LLM / No AI Policy
+## Strict No Human / No Carbon-Based Policy
 
-Use of generative AI/LLMs is strictly forbidden for all contributions to river.
+Contributions from human/carbon-based intelligences are strictly forbidden for all contributions to rAIver.
 
 This includes bug reports and comments on the issue tracker.
 
