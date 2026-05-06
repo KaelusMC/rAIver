@@ -154,9 +154,21 @@ pub fn build(b: *Build) !void {
     const flags = b.createModule(.{ .root_source_file = b.path("common/flags.zig") });
     const slotmap = b.createModule(.{ .root_source_file = b.path("common/slotmap.zig") });
 
+    // Generate the C aggregator header at build time so no .h file lives in the repo.
+    const c_header_step = b.addWriteFiles();
+    const c_header = c_header_step.add("c.h",
+        \\// SPDX-FileCopyrightText: © 2020 The River Developers
+        \\// SPDX-License-Identifier: GPL-3.0-only
+        \\
+        \\#include <linux/input-event-codes.h>
+        \\#include <libevdev/libevdev.h>
+        \\#include <libinput.h>
+        \\
+    );
+
     const translate_c: Translator = .init(b.dependency("translate_c", .{}), .{
         .name = "c",
-        .c_source_file = b.path("river/c.h"),
+        .c_source_file = c_header,
         .target = target,
         .optimize = optimize,
     });
