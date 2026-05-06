@@ -320,14 +320,65 @@ pub fn logFn(
     log.defaultLog(level, scope, format, args);
 }
 
-/// See wlroots_log_wrapper.c
-extern fn river_init_wlroots_log(importance: wlr.log.Importance) void;
-export fn river_wlroots_log_callback(importance: wlr.log.Importance, ptr: [*:0]const u8, len: usize) void {
+// Pure Zig replacement for the previous wlroots_log_wrapper.c shim.
+// Bridges wlroots' variadic logging callback to Zig's std.log via libc vsnprintf.
+
+const wlroots_log_buffer_size = 1024;
+
+extern fn vsnprintf(
+    buf: [*c]u8,
+    size: usize,
+    fmt: [*:0]const u8,
+    args: *std.builtin.VaList,
+) c_int;
+
+fn riverWlrootsLog(importance: wlr.log.Importance, msg: []const u8) void {
     const wlr_log = log.scoped(.wlroots);
     switch (importance) {
-        .err => wlr_log.err("{s}", .{ptr[0..len]}),
-        .info => wlr_log.info("{s}", .{ptr[0..len]}),
-        .debug => wlr_log.debug("{s}", .{ptr[0..len]}),
+        .err => wlr_log.err("{s}", .{msg}),
+        .info => wlr_log.info("{s}", .{msg}),
+        .debug => wlr_log.debug("{s}", .{msg}),
         .silent, .last => unreachable,
     }
+}
+
+fn riverWlrootsLogCallback(
+    importance: wlr.log.Importance,
+    fmt: [*:0]const u8,
+    args: std.builtin.VaList,
+) callconv(.c) void {
+    var buffer: [wlroots_log_buffer_size]u8 = undefined;
+
+    // Need to make a copy of args in case our buffer isn't big
+    // enough and we need to use them again with a larger allocation.
+    var args_first: std.builtin.VaList = undefined;
+    @cVaCopy(&args_first, args);
+    defer @cVaEnd(&args_first);
+
+    const length_signed = vsnprintf(&buffer, wlroots_log_buffer_size, fmt, &args_first);
+    if (length_signed < 0) return;
+    const length: usize = @intCast(length_signed);
+
+    // Need to add one for the terminating 0 byte
+    if (length + 1 <= wlroots_log_buffer_size) {
+        riverWlrootsLog(importance, buffer[0..length]);
+        return;
+    }
+
+    // The formatted string did not fit, allocate enough memory to hold it.
+    var args_second: std.builtin.VaList = undefined;
+    @cVaCopy(&args_second, args);
+    defer @cVaEnd(&args_second);
+
+    const allocated = std.heap.c_allocator.alloc(u8, length + 1) catch return;
+    defer std.heap.c_allocator.free(allocated);
+
+    const length2_signed = vsnprintf(allocated.ptr, length + 1, fmt, &args_second);
+    if (length2_signed < 0) return;
+    std.debug.assert(@as(usize, @intCast(length2_signed)) == length);
+    riverWlrootsLog(importance, allocated[0..length]);
+}
+
+fn river_init_wlroots_log(importance: wlr.log.Importance) void {
+    wlr.log.init(importance, riverWlrootsLogCallback);
 }

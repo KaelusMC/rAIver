@@ -193,11 +193,6 @@ pub fn build(b: *Build) !void {
         river.root_module.addImport("slotmap", slotmap);
         river.root_module.addImport("c", translate_c.mod);
 
-        river.root_module.addCSourceFile(.{
-            .file = b.path("river/wlroots_log_wrapper.c"),
-            .flags = &.{ "-std=c99", "-O2" },
-        });
-
         river.pie = pie;
         river.root_module.omit_frame_pointer = omit_frame_pointer;
 
